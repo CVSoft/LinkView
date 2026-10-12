@@ -1,10 +1,14 @@
-.define TI83
+.define TI86
 
 .ifdef TI82
  #include "ti82_t6c79.inc"
  .echoln "This has NOT been tested! Use CrASH 19.006"
  .echoln "Code expects a T6C79 so only 19.006 is targeted."
  .binarymode TI82
+ .define USES_SHELL
+ .define BPORT_LINK_B2_B3
+ ; bport controls ROM page, but that address pin isn't hooked up
+ .define BPORT_PAGED
  .define bcall(xxxx) call xxxx
  .define asm_ram OP5
  .org asm_exec_ram-3
@@ -13,6 +17,8 @@
 .elseifdef TI83
  #include "ti83.inc"
  .binarymode TI83
+ .define BPORT_LINK_B2_B3
+ .define BPORT_PAGED
  .define bcall(xxxx) call xxxx
  .org userMem
  .unsquish
@@ -21,6 +27,20 @@
  .binarymode TI8X
  .org userMem-2
  .db t2ByteTok,tAsmCmp
+.elseifdef TI85
+ #include "ti85_10.0_temp.inc"
+ .binarymode TI85
+ .define bcall(xxxx) call xxxx
+ .define asm_ram OP6
+ .org asm_exec_ram ; ZShell header??
+ .db "LinkView ROM 10.0",0
+.elseifdef TI86
+ #include "ti86.inc"
+ .binarymode TI86
+ .define bcall(xxxx) call xxxx
+ .define asm_ram OP6
+ .org asm_exec_ram-2
+ .db $8E,$28 ;t2ByteTok tAsmCmp
 .endif
 
 .define LocalLinkFlags asm_flag1
@@ -37,9 +57,10 @@
 
 Setup:
  ;bcall(_NewLine)
- .ifndef TI82
+ .ifndef USES_SHELL
   bcall(_RunIndicOff)
  .else
+  ; launching from a shell leaves a dirty screen
   bcall(_ClrScrnFull)
  .endif
  res HandleIdle,(iy+LocalLinkFlags)
@@ -200,8 +221,12 @@ A2MDE_Hex:
 ;LocalLinkErrorHandler:
 ; set LinkFail,(iy+LocalLinkFlags)
 ; push af
+; .ifdef BPORT_PAGED
 ; in a,(bport)
 ; and $F0
+; .else
+; ld a,D0HD1H
+; .endif
 ; out (bport),a
 ; pop af
 ; ret ; must be in a link subroutine or we'll exit Main
@@ -217,7 +242,7 @@ RawReadByte:
   or e
   jp z,RRBy_LinkFail
   in a,(bport)
-  .ifndef TI8X
+  .ifdef BPORT_LINK_B2_B3
    rra
    rra
   .endif
@@ -234,7 +259,6 @@ RawReadByte:
   set 7,c
   call SetD0LD1H ; new link state D0LD1L, other side to release
   RRBy_NoBit:
-
   ; complete the handshake
   nop
   nop
@@ -253,7 +277,7 @@ RawReadByte:
   jr z,RRBy_LinkFail
   jr {-}
  +:
-  .ifndef TI8X
+  .ifdef BPORT_PAGED
    in a,(bport)
    and $F0
    ;or D0HD1H
@@ -290,7 +314,7 @@ RRBy_D0LD1H:
 
 SetD0LD1H:
  push af
- .ifndef TI8X
+  .ifdef BPORT_PAGED
   in a,(bport)
   and $F0
   or D0LD1H
@@ -304,7 +328,7 @@ SetD0LD1H:
 
 SetD0HD1L:
  push af
- .ifndef TI8X
+  .ifdef BPORT_PAGED
   in a,(bport)
   and $F0
   or D0HD1L
@@ -315,7 +339,7 @@ SetD0HD1L:
 
 SetD0HD1H:
  push af
- .ifndef TI8X
+  .ifdef BPORT_PAGED
   in a,(bport)
   and $F0
   or D0HD1H
